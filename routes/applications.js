@@ -11,8 +11,11 @@ function parseId(value) {
 // GET /api/applications
 router.get("/", async (req, res, next) => {
   try {
-    const applications = await JobApplication.findAll();
-    order: ([["createdAt", "DESC"]], res.status(200).json(applications));
+    const applications = await JobApplication.findAll({
+      order: [["createdAt", "DESC"]],
+    });
+
+    res.status(200).json(applications);
   } catch (error) {
     next(error);
   }

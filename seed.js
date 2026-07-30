@@ -1,3 +1,5 @@
+const { db, JobApplication } = require("./models");
+
 const applications = [
   {
     company: "Acme Corp",
@@ -221,3 +223,26 @@ const applications = [
     notes: "",
   },
 ];
+
+async function seed() {
+  try {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Refusing to seed in production.");
+    }
+
+    await db.sync({ force: true });
+
+    await JobApplication.bulkCreate(applications, {
+      validate: true,
+    });
+
+    console.log(`Seeded ${applications.length} job applications.`);
+  } catch (error) {
+    console.error("Seed failed:", error);
+    process.exitCode = 1;
+  } finally {
+    await db.close();
+  }
+}
+
+seed();
