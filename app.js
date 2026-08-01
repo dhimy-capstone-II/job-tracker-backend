@@ -39,3 +39,42 @@ const limiter = rateLimit({
     error: "Too many requests. Please try again later.",
   },
 });
+
+// ---------- middleware ----------
+// Middleware runs in order on every request before it reaches the routes.
+
+// Add safer HTTP response headers.
+app.use(helmet());
+
+// Allow the React frontend to call the backend and send cookies.
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    credentials: true,
+  }),
+);
+// Create and manage a session for each logged-in user.
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET, // Protects the session cookie.
+
+    resave: false, // Do not save the session again when nothing changed.
+
+    saveUninitialized: false, // Do not create an empty session for every visitor.
+
+    cookie: {
+      httpOnly: true, // Prevent frontend JavaScript from reading the cookie.
+
+      secure: process.env.NODE_ENV === "production", // Require HTTPS cookies when deployed.
+
+      // Allow the deployed frontend and backend to share the cookie.
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    },
+  }),
+);
+app.use(morgan("dev")); // Log requests in the terminal.
+app.use(express.json({ limit: "10kb" })); // Read JSON request bodies and limit their size.
+app.use(limiter); // Limit repeated requests from the same IP.
+app.use(express.static(path.join(__dirname, "public"))); // Serve files stored in the public folder.
+
+
