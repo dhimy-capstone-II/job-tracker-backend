@@ -1,60 +1,41 @@
-// app.js starts Express and connects to PostgreSQL
+// app.js starts Express and connects to PostgreSQL.
+
+// Load environment variables from .env.
 require("dotenv").config();
 
+// Import external packages.
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
-
+const helmet = require("helmet");
+const session = require("express-session");
+const { rateLimit } = require("express-rate-limit");
+// Import the database and application routes.
 const { db } = require("./models");
-const applicationsRouter = require("./routes/applications");
-
+// Import all routers from routes/index.js.
+const { applicationsRouter, authRouter } = require("./routes");
+const requireAuth = require("./middleware/requireAuth");
+// Create the Express application.
 const app = express();
+
+// Use Render's port when deployed, or port 3000 locally.
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(cors());
-app.use(morgan("dev"));
-app.use(express.json());
+// app.js is the front door of the server.
+// It creates the app, adds middleware, mounts routes,
+// connects to the database, and starts the server.
 
-// Health-check route
-app.get("/api/health", (req, res) => {
-  res.status(200).json({ status: "ok" });
+// Trust the deployment proxy so Express can detect the real visitor IP.
+app.set("trust proxy", 1);
+
+// Limit how many requests one IP can make.
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Maximum requests per IP during that time
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: {
+    error: "Too many requests. Please try again later.",
+  },
 });
-
-// Application routes
-app.use("/api/applications", applicationsRouter);
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: "Route not found" });
-});
-
-// General error handler
-app.use((error, req, res, next) => {
-  console.error(error);
-
-  res.status(500).json({
-    error: "Internal server error",
-  });
-});
-
-// Connect to PostgreSQL and start Express
-async function startApp() {
-  try {
-    await db.authenticate();
-    console.log("Database connected successfully.");
-
-    await db.sync();
-    console.log("Database synced successfully.");
-
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
-  } catch (error) {
-    console.error("Failed to start server:", error);
-    process.exit(1);
-  }
-}
-
-startApp();
-
