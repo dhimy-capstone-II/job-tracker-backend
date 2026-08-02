@@ -11,8 +11,11 @@ function parseId(value) {
 // GET /api/applications
 router.get("/", async (req, res, next) => {
   try {
-    const applications = await JobApplication.findAll();
-    order: ([["createdAt", "DESC"]], res.status(200).json(applications));
+    const applications = await JobApplication.findAll({
+      order: [["createdAt", "DESC"]],
+    });
+
+    res.status(200).json(applications);
   } catch (error) {
     next(error);
   }
@@ -43,12 +46,18 @@ router.get("/:id", async (req, res, next) => {
   }
 });
 
-// POST (create)
-
+// POST /api/applications
 router.post("/", async (req, res, next) => {
   try {
-    const { company, position, status, location, dateApplied, jobLink, notes } =
-      req.body;
+    const {
+      company,
+      position,
+      status,
+      location,
+      dateApplied,
+      jobLink,
+      notes,
+    } = req.body;
 
     const application = await JobApplication.create({
       company,
@@ -63,25 +72,44 @@ router.post("/", async (req, res, next) => {
     res.status(201).json(application);
   } catch (error) {
     if (error.name === "SequelizeValidationError") {
-      return res.status(400).json({ error: error.errors[0].message });
+      return res.status(400).json({
+        error: error.errors[0].message,
+      });
     }
+
     next(error);
   }
 });
 
-// PATCH (update)
+// PATCH /api/applications/:id
 router.patch("/:id", async (req, res, next) => {
   try {
     const id = parseId(req.params.id);
-    if (!id) return res.status(400).json({ error: "Invalid id" });
 
-    const application = await JobApplication.findByPk(id);
-    if (!application) {
-      return res.status(404).json({ error: "Job application not found" });
+    if (!id) {
+      return res.status(400).json({
+        error: "Invalid application ID",
+      });
     }
 
-    const { company, position, status, location, dateApplied, jobLink, notes } =
-      req.body;
+    const application = await JobApplication.findByPk(id);
+
+    if (!application) {
+      return res.status(404).json({
+        error: "Application not found",
+      });
+    }
+
+    const {
+      company,
+      position,
+      status,
+      location,
+      dateApplied,
+      jobLink,
+      notes,
+    } = req.body;
+
     await application.update({
       company,
       position,
@@ -95,24 +123,36 @@ router.patch("/:id", async (req, res, next) => {
     res.status(200).json(application);
   } catch (error) {
     if (error.name === "SequelizeValidationError") {
-      return res.status(400).json({ error: error.errors[0].message });
+      return res.status(400).json({
+        error: error.errors[0].message,
+      });
     }
+
     next(error);
   }
 });
 
-// DELETE
+// DELETE /api/applications/:id
 router.delete("/:id", async (req, res, next) => {
   try {
     const id = parseId(req.params.id);
-    if (!id) return res.status(400).json({ error: "Invalid id" });
+
+    if (!id) {
+      return res.status(400).json({
+        error: "Invalid application ID",
+      });
+    }
 
     const application = await JobApplication.findByPk(id);
+
     if (!application) {
-      return res.status(404).json({ error: "Job application not found" });
+      return res.status(404).json({
+        error: "Application not found",
+      });
     }
 
     await application.destroy();
+
     res.sendStatus(204);
   } catch (error) {
     next(error);
