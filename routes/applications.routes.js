@@ -65,8 +65,8 @@ function handleValidationError(error, res, next) {
 // READ ALL — GET /api/applications
 router.get("/", async (req, res, next) => {
   try {
-    const applications = await JobApplication.findAll({
-      // Only return applications owned by the logged-in user.
+    const applications = await JobApplication.findAll({// you ccan only see application associate to your login
+    
       where: {
         userId: req.user.id,
       },
