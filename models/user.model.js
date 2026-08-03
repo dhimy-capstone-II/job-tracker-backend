@@ -1,74 +1,76 @@
-// models/User.js — the User table.
+// models/user.model.js — the User table.
 //
-// A user can now arrive in our app TWO different ways, and one table holds both:
+// A user can enter the app in two ways:
 //
-//   1. LOCAL signup  — they gave us an email + password. We store a bcrypt HASH
-//                      of that password in passwordHash. auth0Id stays null.
-//   2. AUTH0 / OAuth — they logged in with Google/GitHub/etc. Auth0 owns the
-//                      password (if there even is one), so passwordHash stays
-//                      null and we store their Auth0 "sub" in auth0Id.
+// 1. Local signup:
+//    The user provides an email and password.
+//    We store only the bcrypt password hash.
 //
-// That's why BOTH passwordHash and auth0Id are nullable: every row fills in one
-// or the other. Neither is required on its own.
+// 2. Auth0 login:
+//    Auth0 manages the credential.
+//    We store the permanent Auth0 user ID in auth0Id.
+//
+// passwordHash and auth0Id are both nullable because each user
+// normally uses one authentication method or the other.
+
 const { DataTypes } = require("sequelize");
 const db = require("../db");
 
-const User = db.define("user.model", {
-  id: {
-    type: DataTypes.UUID,
-    defaultValue: DataTypes.UUIDV4,
-    primaryKey: true,
-    allowNull: false,
-  },
+const User = db.define(
+  "User",
+  {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
+      allowNull: false,
+    },
 
-  // The user's full name. Comes from Auth0 for OAuth users; optional for everyone.
-  name: {
-    type: DataTypes.STRING,
-    allowNull: true,
-  },
+    // Optional full name.
+    name: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
 
-  // A display name the user picks in OUR app (sent from the frontend).
-  username: {
-    type: DataTypes.STRING,
-    allowNull: false,
-    unique: true,
-    validate: {
-      len: [3, 20],
+    // Display name used inside the application.
+    username: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+      validate: {
+        len: [3, 20],
+      },
+    },
+
+    // Used for local login and may also come from Auth0.
+    email: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      unique: true,
+      validate: {
+        isEmail: true,
+      },
+    },
+
+    // Stores only the bcrypt hash, never the original password.
+    passwordHash: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+
+    // Permanent Auth0 user identifier.
+    auth0Id: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      unique: true,
     },
   },
-
-  // Required for local signup — it's how you log in. For Auth0 users it comes
-  // from a custom claim, which is only present if the Post-Login Action is set
-  // up, so the column itself stays nullable.
-  email: {
-    type: DataTypes.STRING,
-    allowNull: true,
-    unique: true,
-    validate: {
-      isEmail: true,
-    },
+  {
+    tableName: "users",
   },
+);
 
-  // NEVER the password itself — only bcrypt's one-way hash of it. Even if this
-  // table leaked, the original passwords are not in it.
-  passwordHash: {
-    type: DataTypes.STRING,
-    allowNull: true, // Null for Auth0/OAuth users — Auth0 holds their credential.
-  },
-
-  // The Auth0 user id — the token's "sub", e.g. "auth0|abc123". The stable link
-  // between Auth0 and our database. We key on this, never on email because emails
-  // can change, while the sub does not. Null for local password users.
-  auth0Id: {
-    type: DataTypes.STRING,
-    allowNull: true,
-    unique: true,
-  },
-});
-
-// Express calls toJSON automatically whenever you res.json(user). Overriding it
-// here means the password hash can NEVER leak out of an endpoint by accident.
-// We do not have to remember to remove it at every call site.
+// Prevent passwordHash from being included in JSON responses.
 User.prototype.toJSON = function () {
   const values = { ...this.get() };
   delete values.passwordHash;
