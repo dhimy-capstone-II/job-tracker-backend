@@ -69,7 +69,7 @@ const applications = [
     status: "Applied",
     location: "San Francisco, CA",
     dateApplied: "2026-07-18",
-    jobLink: "https://example.com/openai",
+    jobLink: "https://openai.com/careers/",
     notes: "Portfolio submitted.",
   },
   {
