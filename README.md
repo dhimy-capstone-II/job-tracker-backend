@@ -250,9 +250,24 @@ A Sequelize validation failure must be caught in the route and returned as a `40
 | `GET` | `/api/applications/:id` | Get one job application | `200` | `404`, `500` |
 | `POST` | `/api/applications` | Create a job application | `201` | `400`, `500` |
 | `PATCH` | `/api/applications/:id` | Update a job application | `200` | `400`, `404`, `500` |
+| `PUT` | `/api/applications/:id` | Replace a job application | `200` | `400`, `404`, `500` |
 | `DELETE` | `/api/applications/:id` | Delete a job application | `204` | `404`, `500` |
+| `GET` | `/api/analytics/summary` | Dashboard statistics for the logged-in user | `200` | `401`, `500` |
+| `POST` | `/auth/signup` | Create an account and log in | `201` | `400`, `409` |
+| `POST` | `/auth/login` | Log in with email/username and password | `200` | `400`, `401` |
+| `POST` | `/auth/logout` | Clear the session cookie | `200` | — |
+| `GET` | `/auth/me` | The currently logged-in user | `200` | `401` |
+| `POST` | `/auth/auth0` | Sync an Auth0 user into our database | `200`, `201` | `401`, `501` |
 
-Any route that is not defined should return `404` with a JSON body, not an HTML error page.
+Every `/api/applications` and `/api/analytics` route requires a logged-in user
+and only ever returns that user's own rows. Requests without a valid session get
+`401`, and asking for a row that belongs to someone else returns `404` — the same
+answer as a row that does not exist, so the API never reveals that it is there.
+
+`GET /api/analytics/summary` accepts `?days=N` (default 30, maximum 365) to set
+how far back the timeline reaches.
+
+Any route that is not defined returns `404` with a JSON body, not an HTML error page.
 
 ### Error Response Shape
 
@@ -301,19 +316,28 @@ Only `company`, `position`, and `status` are required. If `status` is omitted, t
 
 ## Run Locally
 
-Create the local database once:
+You need **Node 18+** and a running **PostgreSQL** server. Nothing else — an
+Auth0 account is optional (see Environment Variables below).
 
 ```bash
-createdb job_application_tracker
+npm install            # 1. install dependencies
+cp .env.example .env   # 2. create your local config
+npm run db:create      # 3. create the database named in DATABASE_URL
+npm run seed           # 4. load 48 sample applications (optional)
+npm run dev            # 5. start the server
 ```
 
-Then start the server:
+`npm run db:create` reads the database name straight out of `DATABASE_URL`, so
+the database it creates and the one the app connects to can never drift apart.
+It is safe to run more than once — if the database already exists it says so and
+does nothing.
 
-```bash
-cd ~/TTPR/capstone-2/job-tracker-backend
-npm install
-npm run dev
-```
+Step 4 creates a demo account you can log in with:
+
+| Field | Value |
+|---|---|
+| Email | `dhimy@example.com` |
+| Password | `Password123!` |
 
 The backend runs on:
 
@@ -418,15 +442,86 @@ Verify:
 
 Save the requests as a shared collection so both teammates can run the same tests.
 
+## Automated Tests
+
+The suite runs against a **separate** database so it can never touch your
+development data. It uses Node's built-in test runner plus `supertest`, which
+makes real HTTP requests to the Express app without opening a port.
+
+```bash
+createdb job_tracker_test   # once
+npm test
+```
+
+30 tests currently pass, covering:
+
+- **Authentication** — signup, login, logout, the session cookie, and the fact
+  that the password hash never appears in a response.
+- **Authorization** — the most important test in the project: one user cannot
+  read, update, or delete another user's application, and analytics never mixes
+  in someone else's rows.
+- **Validation** — missing fields, short passwords, duplicate emails, invalid
+  statuses, malformed URLs, and non-numeric IDs.
+- **Analytics maths** — that `Saved` is excluded from the rate denominator, that
+  rates are `0` instead of `NaN` when nothing has been submitted, and that the
+  timeline fills empty days with zeroes.
+
+To point the tests somewhere else, set `TEST_DATABASE_URL`. The suite refuses to
+run unless the database name contains `test`, so a typo cannot wipe real data.
+
 ## Available Scripts
 
 ```bash
-npm run dev     # start with nodemon for development
-npm start       # start with node for production
-npm run seed    # load sample data
+npm run dev        # start with nodemon for development
+npm start          # start with node for production
+npm run db:create  # create the database named in DATABASE_URL (safe to re-run)
+npm run seed       # reset the tables and load 48 sample applications
+npm test           # run the automated test suite
 ```
 
 The exact scripts must match the scripts in `package.json`. Render uses `npm start`.
+
+## Known Limitations
+
+Recorded honestly rather than hidden:
+
+- **The voice interview room is unfinished.** `socket/index.js` implements room
+  membership only (join, leave, who is here). The WebRTC offer/answer/ICE
+  exchange that would carry actual audio is not written yet, so no audio flows.
+- **Analytics group days in UTC.** An application saved late at night in a
+  western timezone can land in the next day's bucket on the timeline chart.
+- **`db.sync()` creates tables at startup** instead of using versioned
+  migrations. That is fine for a project this size, but a production app would
+  use a migration tool so schema changes are reviewable and reversible.
+- **Auth0 sync is one-way.** If a user changes their name in Auth0, our copy of
+  it is not updated.
+
+## Troubleshooting
+
+**`Unable to start server: database "..." does not exist`**
+Run `npm run db:create`. This is the most common first-run error.
+
+**`Missing DATABASE_URL — set it in your .env file.`**
+You have not created `.env` yet. Run `cp .env.example .env`.
+
+**`Missing JWT_SECRET`**
+Generate one and paste it into `.env`:
+```bash
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+```
+
+**`⚠️ Auth0 is not configured`**
+This is a warning, not an error. The server is running normally and email +
+password login works. Only the "Continue with Auth0" button is hidden.
+
+**The frontend loads but every request fails**
+Check that `FRONTEND_URL` in the backend `.env` exactly matches the address Vite
+prints (`http://localhost:5173`). CORS runs on an exact string match, and cookies
+will be silently dropped if it does not line up.
+
+**`psql -l` prints a column error**
+Your `psql` client is older than your PostgreSQL server. It does not affect the
+app — use `psql -d postgres -c "\l"` or upgrade the client.
 
 ## Deployment
 

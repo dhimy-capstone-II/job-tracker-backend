@@ -1,7 +1,10 @@
-// app.js — the front door of the server.
+// app.js — builds the Express application.
 //
-// It creates the Express app, adds middleware, mounts routes,
-// connects to PostgreSQL, and starts the server.
+// This file only ASSEMBLES the app: middleware, routes, and error handling.
+// It does not open a port and does not connect to the database. server.js does
+// that. Keeping the two separate means the tests can import this app and make
+// real HTTP requests against it without starting a long-running server or
+// fighting over port 3000.
 
 require("dotenv").config();
 
@@ -13,10 +16,10 @@ const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const { rateLimit } = require("express-rate-limit");
 
-const { db } = require("./models");
 const {
   applicationsRouter,
   authRouter,
+  analyticsRouter,
 } = require("./routes");
 
 const {
@@ -37,7 +40,7 @@ const isProd = process.env.NODE_ENV === "production";
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: isProd ? 100 : 1000,
+  limit: isProd ? 200 : 1000,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: {
@@ -61,8 +64,11 @@ app.use(
   }),
 );
 
-// Log requests in the terminal.
-app.use(morgan("dev"));
+// Log requests in the terminal. Tests make hundreds of requests, so the log is
+// switched off there to keep the test output readable.
+if (process.env.NODE_ENV !== "test") {
+  app.use(morgan("dev"));
+}
 
 // Read JSON request bodies and limit their size.
 app.use(express.json({ limit: "10kb" }));
@@ -131,6 +137,19 @@ app.use(
   applicationsRouter,
 );
 
+// ---------- analytics routes ----------
+//
+// Read-only statistics for the logged-in user's own applications.
+//
+// These become:
+// GET /api/analytics/summary
+
+app.use(
+  "/api/analytics",
+  requireAuth,
+  analyticsRouter,
+);
+
 // ---------- 404 handler ----------
 
 app.use((req, res) => {
@@ -162,44 +181,5 @@ app.use((error, req, res, next) => {
   });
 });
 
-// ---------- start the server ----------
-
-async function startApp() {
-  try {
-    // Check that PostgreSQL is reachable.
-    await db.authenticate();
-    console.log("🐘 Database connection established.");
-
-    // Create missing tables without deleting existing data.
-    await db.sync();
-    console.log("🧩 Models synced.");
-
-    const server = app.listen(PORT, () => {
-      console.log(
-        `🚀 Server is running on http://localhost:${PORT}`,
-      );
-    });
-
-    // Close Express and PostgreSQL safely when the process stops.
-    function shutdown() {
-      console.log("\n👋 Shutting down...");
-
-      server.close(async () => {
-        await db.close();
-        process.exit(0);
-      });
-    }
-
-    process.on("SIGTERM", shutdown);
-    process.on("SIGINT", shutdown);
-  } catch (error) {
-    console.error(
-      "❌ Unable to start server:",
-      error.message,
-    );
-
-    process.exit(1);
-  }
-}
-
-startApp();
+// Export the assembled app. server.js starts it; the tests import it directly.
+module.exports = app;

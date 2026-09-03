@@ -40,13 +40,15 @@ const router = express.Router();
 const SALT_ROUNDS = 12;
 
 // Restrict repeated login and signup attempts.
+// Login and signup are the endpoints an attacker would guess against, so they
+// get a much tighter limit than the rest of the API. Development uses a loose
+// limit because React StrictMode double-fires requests and repeated manual
+// testing would otherwise lock you out of your own app.
+const isProd = process.env.NODE_ENV === "production";
+
 const authLimiter = rateLimit({
-  // windowMs: 15 * 60 * 1000,
-  // limit: 20,
-
-  windowMs: 60 * 1000,
-  limit: 1000,
-
+  windowMs: 15 * 60 * 1000,
+  limit: isProd ? 20 : 200,
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: {

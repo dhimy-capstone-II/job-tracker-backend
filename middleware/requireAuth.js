@@ -20,8 +20,12 @@ const { User } = require("../models");
 
 // Custom Auth0 claims namespace.
 // This must match the namespace used in the Auth0 Post-Login Action.
-const CLAIMS_NAMESPACE =
-  process.env.AUTH0_CLAIMS_NAMESPACE || "https://myapp.example.com";
+// Accept the namespace with or without a trailing slash. The claim lookups
+// below add their own "/", so a value ending in "/" would build a key with a
+// double slash and quietly match nothing.
+const CLAIMS_NAMESPACE = (
+  process.env.AUTH0_CLAIMS_NAMESPACE || "https://myapp.example.com"
+).replace(/\/$/, "");
 
 // ---------- our JWT settings ----------
 
@@ -34,16 +38,28 @@ if (!JWT_SECRET) {
   );
 }
 
-if (!process.env.AUTH0_DOMAIN || !process.env.AUTH0_AUDIENCE) {
-  throw new Error(
-    "Missing Auth0 environment variables — set AUTH0_DOMAIN and AUTH0_AUDIENCE.",
-  );
-}
+// Auth0 is OPTIONAL.
+//
+// The app has two ways to log in: a local email/password account and an Auth0
+// social login. Only the local one is needed to run and demo the project, so a
+// missing Auth0 configuration must not stop the server from starting. When the
+// two Auth0 variables are absent we simply turn that second door off and say so
+// clearly if anyone tries to use it.
+const AUTH0_ENABLED = Boolean(
+  process.env.AUTH0_DOMAIN && process.env.AUTH0_AUDIENCE,
+);
 
 // Accept either a bare Auth0 domain or one copied with https://.
-const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN
+const AUTH0_DOMAIN = (process.env.AUTH0_DOMAIN || "")
   .replace(/^https?:\/\//, "")
   .replace(/\/$/, "");
+
+if (!AUTH0_ENABLED) {
+  console.warn(
+    "⚠️  Auth0 is not configured (AUTH0_DOMAIN / AUTH0_AUDIENCE are unset).\n" +
+      "   Local email + password login still works. Social login is disabled.",
+  );
+}
 
 // ---------- token helpers ----------
 
@@ -84,11 +100,21 @@ const clearTokenCookie = (res) =>
 
 // ---------- Auth0 verification ----------
 
-const jwtCheck = auth({
-  audience: process.env.AUTH0_AUDIENCE,
-  issuerBaseURL: `https://${AUTH0_DOMAIN}/`,
-  tokenSigningAlg: "RS256",
-});
+// When Auth0 is configured this verifies the token against Auth0's public key.
+// When it is not, it replies with a clear 501 instead of crashing, so the error
+// explains what to configure rather than looking like a bug.
+const jwtCheck = AUTH0_ENABLED
+  ? auth({
+      audience: process.env.AUTH0_AUDIENCE,
+      issuerBaseURL: `https://${AUTH0_DOMAIN}/`,
+      tokenSigningAlg: "RS256",
+    })
+  : (req, res) =>
+      res.status(501).json({
+        error:
+          "Social login is not configured on this server. " +
+          "Set AUTH0_DOMAIN and AUTH0_AUDIENCE, or sign in with email and password.",
+      });
 
 // ---------- unified authentication guard ----------
 
@@ -167,6 +193,7 @@ const identityFromToken = (req) => {
 };
 
 module.exports = {
+  AUTH0_ENABLED,
   jwtCheck,
   requireAuth,
   identityFromToken,

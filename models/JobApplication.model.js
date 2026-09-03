@@ -28,6 +28,12 @@ const JobApplication = db.define(
       type: DataTypes.STRING,
       allowNull: false,
       validate: {
+        // notNull fires when the field is missing entirely; notEmpty fires when
+        // it is present but blank. Both are set so the user sees the same clear
+        // message instead of Sequelize's internal "Model.field cannot be null".
+        notNull: {
+          msg: "Company is required",
+        },
         notEmpty: {
           msg: "Company is required",
         },
@@ -39,6 +45,12 @@ const JobApplication = db.define(
       type: DataTypes.STRING,
       allowNull: false,
       validate: {
+        // notNull fires when the field is missing entirely; notEmpty fires when
+        // it is present but blank. Both are set so the user sees the same clear
+        // message instead of Sequelize's internal "Model.field cannot be null".
+        notNull: {
+          msg: "Position is required",
+        },
         notEmpty: {
           msg: "Position is required",
         },
