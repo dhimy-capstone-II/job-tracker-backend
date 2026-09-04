@@ -457,10 +457,13 @@ async function seed() {
     const passwordHash = await bcrypt.hash("Password123!", 10);
 
     // Create one local demo user.
+    // Named "demo", deliberately not "dhimy". The seed used to claim the
+    // owner's own preferred username, so signing up as yourself on a seeded
+    // database failed with "That username is already taken".
     const demoUser = await User.create({
-      name: "Dhimy Jean",
-      username: "dhimy",
-      email: "dhimy@example.com",
+      name: "Demo User",
+      username: "demo",
+      email: "demo@example.com",
       passwordHash,
       auth0Id: null,
     });
